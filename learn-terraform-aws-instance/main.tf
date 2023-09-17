@@ -24,11 +24,12 @@ data "aws_ami" "amzlinux2" {
 }
 
 
+
 resource "aws_instance" "app_server" {
   ami           = data.aws_ami.amzlinux2.id
-  instance_type = "t2.medium"
+  instance_type = "t2.micro"
 
   tags = {
-    Name = "ExampleAppServerInstance"
+    Name = var.instance_name
   }
 }
