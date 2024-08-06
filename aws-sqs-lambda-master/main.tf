@@ -35,6 +35,7 @@ resource "aws_lambda_function" "default" {
   handler          = "lambda_function.handler"
   source_code_hash = data.archive_file.default.output_base64sha256
   runtime          = "nodejs20.x"
+  timeout = 120
 }
 
 // TODO SNS Resources
