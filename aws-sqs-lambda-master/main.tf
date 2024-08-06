@@ -2,13 +2,13 @@
 resource "aws_iam_role" "default" {
   name               = var.service_name
   description        = "IAM Role for ${var.service_name}"
-  assume_role_policy = file("${var.service_name}_role.json")
+  assume_role_policy = file("iam/${var.service_name}_role.json")
 }
 
 resource "aws_iam_policy" "default" {
   name        = var.service_name
   description = "IAM Policy for ${var.service_name}"
-  policy      = file("${var.service_name}_policy.json")
+  policy      = file("iam/${var.service_name}_policy.json")
 }
 
 resource "aws_iam_role_policy_attachment" "default" {
@@ -32,7 +32,7 @@ resource "aws_lambda_function" "default" {
   filename         = var.output_path
   function_name    = var.service_name
   role             = aws_iam_role.default.arn
-  handler = "lambda_function.handler"
+  handler          = "lambda_function.handler"
   source_code_hash = data.archive_file.default.output_base64sha256
   runtime          = "nodejs20.x"
 }
@@ -53,11 +53,31 @@ resource "aws_sns_topic_subscription" "default" {
 
 // SQS
 resource "aws_sqs_queue" "default" {
-  name = "${var.service_name}_sqs"
+  name                       = "${var.service_name}_sqs"
+  visibility_timeout_seconds = 12
+
+#   redrive_policy = jsonencode({
+#     deadLetterTargetArn = aws_sqs_queue.default_deadletter.arn
+#     maxReceiveCount     = 4
+#   })
 }
 
 // Lambda SQS mapping
 resource "aws_lambda_event_source_mapping" "default" {
   event_source_arn = aws_sqs_queue.default.arn
   function_name    = aws_lambda_function.default.arn
+}
+
+// Dead Letter Queue
+resource "aws_sqs_queue" "default_deadletter" {
+  name = "${var.service_name}_sqs_dlq"
+}
+
+resource "aws_sqs_queue_redrive_allow_policy" "terraform_queue_redrive_allow_policy" {
+  queue_url = aws_sqs_queue.default_deadletter.id
+
+  redrive_allow_policy = jsonencode({
+    redrivePermission = "byQueue",
+    sourceQueueArns   = [aws_sqs_queue.default_deadletter.arn]
+  })
 }

@@ -36,4 +36,4 @@ terraform.rc
 # intelliJ
 .idea
 
-.zip
+*.zip
