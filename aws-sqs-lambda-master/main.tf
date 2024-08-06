@@ -56,10 +56,10 @@ resource "aws_sqs_queue" "default" {
   name                       = "${var.service_name}_sqs"
   visibility_timeout_seconds = 12
 
-#   redrive_policy = jsonencode({
-#     deadLetterTargetArn = aws_sqs_queue.default_deadletter.arn
-#     maxReceiveCount     = 4
-#   })
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.default_deadletter.arn
+    maxReceiveCount     = 4
+  })
 }
 
 // Lambda SQS mapping
@@ -78,6 +78,6 @@ resource "aws_sqs_queue_redrive_allow_policy" "terraform_queue_redrive_allow_pol
 
   redrive_allow_policy = jsonencode({
     redrivePermission = "byQueue",
-    sourceQueueArns   = [aws_sqs_queue.default_deadletter.arn]
+    sourceQueueArns   = [aws_sqs_queue.default.arn]
   })
 }
