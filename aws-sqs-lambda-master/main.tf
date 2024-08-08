@@ -2,13 +2,13 @@
 resource "aws_iam_role" "default" {
   name               = var.service_name
   description        = "IAM Role for ${var.service_name}"
-  assume_role_policy = file("iam/${var.service_name}_role.json")
+  assume_role_policy = file("policy/${var.service_name}_role.json")
 }
 
 resource "aws_iam_policy" "default" {
   name        = var.service_name
   description = "IAM Policy for ${var.service_name}"
-  policy      = file("iam/${var.service_name}_policy.json")
+  policy      = file("policy/${var.service_name}_policy.json")
 }
 
 resource "aws_iam_role_policy_attachment" "default" {
