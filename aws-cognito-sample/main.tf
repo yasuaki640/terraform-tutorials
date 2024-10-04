@@ -74,3 +74,15 @@ resource "aws_cognito_user_pool" "pool" {
     ]
   }
 }
+
+resource "aws_cognito_user_pool_client" "client" {
+  name = "aws-cognito-sample-application-client"
+
+  user_pool_id = aws_cognito_user_pool.pool.id
+
+  token_validity_units {
+    access_token  = "minutes"
+    id_token      = "minutes"
+    refresh_token = "days"
+  }
+}
