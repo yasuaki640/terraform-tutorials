@@ -76,13 +76,37 @@ resource "aws_cognito_user_pool" "pool" {
 }
 
 resource "aws_cognito_user_pool_client" "client" {
-  name = "aws-cognito-sample-application-client"
-
+  name         = "aws-cognito-sample-application-client"
   user_pool_id = aws_cognito_user_pool.pool.id
+
+  allowed_oauth_flows                  = ["code"]
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_scopes                 = ["email", "openid", "profile"]
+
+  callback_urls        = ["http://localhost/callback"]
+  logout_urls          = ["http://localhost/logout"]
+  default_redirect_uri = "http://localhost/callback"
+
+  explicit_auth_flows = [
+    "ALLOW_REFRESH_TOKEN_AUTH",
+    "ALLOW_USER_PASSWORD_AUTH"
+  ]
+
+  generate_secret              = true
+  supported_identity_providers = ["COGNITO"]
 
   token_validity_units {
     access_token  = "minutes"
     id_token      = "minutes"
     refresh_token = "days"
   }
+
+  access_token_validity  = 60
+  id_token_validity      = 60
+  refresh_token_validity = 30
+}
+
+resource "aws_cognito_user_pool_domain" "main" {
+  domain       = "yasuaki640-domain"
+  user_pool_id = aws_cognito_user_pool.pool.id
 }
