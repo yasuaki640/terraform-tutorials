@@ -2,13 +2,19 @@ package handlers
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
-	"github.com/golang-jwt/jwt/v4"
-	"github.com/yasuaki640/terraform-tutorials/aws-cognito-sample/sample-application-client/config"
-	"golang.org/x/oauth2"
 	"html/template"
 	"net/http"
+
+	"github.com/golang-jwt/jwt/v4"
+	"github.com/gorilla/sessions"
+	"github.com/yasuaki640/terraform-tutorials/aws-cognito-sample/sample-application-client/config"
+	"golang.org/x/oauth2"
 )
+
+var store = sessions.NewCookieStore([]byte("something-very-secret"))
 
 func HandleHome(w http.ResponseWriter, r *http.Request) {
 	html := `
@@ -21,13 +27,33 @@ func HandleHome(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, html)
 }
 
+func generateState() string {
+	b := make([]byte, 32)
+	rand.Read(b)
+	return base64.URLEncoding.EncodeToString(b)
+}
+
 func HandleLogin(writer http.ResponseWriter, request *http.Request) {
-	state := "state" // Replace with a secure random string in production
+	// Store the state in the session
+	state := generateState()
+	session, _ := store.Get(request, "auth-session")
+	session.Values["state"] = state
+	session.Save(request, writer)
+
 	url := config.Oauth2Config.AuthCodeURL(state, oauth2.AccessTypeOffline)
 	http.Redirect(writer, request, url, http.StatusFound)
 }
 
 func HandleCallback(writer http.ResponseWriter, request *http.Request) {
+	// Check if the state matches
+	session, _ := store.Get(request, "auth-session")
+	stored := session.Values["state"]
+	received := request.URL.Query().Get("state")
+	if stored != received {
+		http.Error(writer, "Invalid state parameter", http.StatusBadRequest)
+		return
+	}
+
 	ctx := context.Background()
 	code := request.URL.Query().Get("code")
 

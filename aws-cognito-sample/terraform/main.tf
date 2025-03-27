@@ -88,9 +88,18 @@ resource "aws_cognito_user_pool_client" "client" {
   name         = "aws-cognito-sample-application-client"
   user_pool_id = aws_cognito_user_pool.pool.id
 
-  allowed_oauth_flows                  = ["code"]
+  # nonceを有効にするために必要な設定
+  allowed_oauth_flows                  = ["code", "implicit"]
   allowed_oauth_flows_user_pool_client = true
   allowed_oauth_scopes                 = ["email", "openid", "profile"]
+
+  # OpenID Connect設定を追加
+  enable_token_revocation = true
+  prevent_user_existence_errors = "ENABLED"
+
+  # OIDCのnonce対応を有効化
+  auth_session_validity = 3 # minutes
+  id_token_validity = 60   # minutes
 
   # TODO: tfvars で指定する
   callback_urls        = ["http://localhost:8080/callback"]
@@ -112,7 +121,6 @@ resource "aws_cognito_user_pool_client" "client" {
   }
 
   access_token_validity  = 60
-  id_token_validity      = 60
   refresh_token_validity = 30
 }
 
