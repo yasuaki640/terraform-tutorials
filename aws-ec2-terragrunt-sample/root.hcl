@@ -1,7 +1,11 @@
 # root.hcl
+locals {
+  region_hcl = find_in_parent_folders("region.hcl")
+  region     = read_terragrunt_config(local.region_hcl).locals.region
+}
+
 remote_state {
   backend = "s3"
-
   generate = {
     path      = "backend.tf"
     if_exists = "overwrite_terragrunt"
@@ -22,7 +26,7 @@ generate "provider" {
   if_exists = "overwrite_terragrunt"
   contents = <<EOF
 provider "aws" {
-  region = "ap-northeast-1"
+  region = "${local.region}"
 }
 EOF
 }
