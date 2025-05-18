@@ -42,3 +42,18 @@ func (actor CognitoActions) AdminCreateUser(ctx context.Context, userPoolId stri
 	}
 	return err
 }
+
+// AdminInitiateAuth initiates the administrator sign-in flow for a user.
+func (actor CognitoActions) AdminInitiateAuth(ctx context.Context, userPoolId string, clientId string, userName string, password string) (*cognitoidentityprovider.AdminInitiateAuthOutput, error) {
+	authOutput, err := actor.CognitoClient.AdminInitiateAuth(ctx, &cognitoidentityprovider.AdminInitiateAuthInput{
+		AuthFlow:       types.AuthFlowTypeAdminUserPasswordAuth,
+		ClientId:       aws.String(clientId),
+		UserPoolId:     aws.String(userPoolId),
+		AuthParameters: map[string]string{"USERNAME": userName, "PASSWORD": password},
+	})
+	if err != nil {
+		log.Printf("Couldn't initiate auth for user %v. Here's why: %v\n", userName, err)
+		return nil, err
+	}
+	return authOutput, nil
+}
