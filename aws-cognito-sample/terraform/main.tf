@@ -9,6 +9,18 @@ terraform {
   required_version = ">= 1.2.0"
 }
 
+variable "google_client_id" {
+  description = "Google OAuth Client ID"
+  type        = string
+  sensitive   = true
+}
+
+variable "google_client_secret" {
+  description = "Google OAuth Client Secret"
+  type        = string
+  sensitive   = true
+}
+
 provider "aws" {
   region = "ap-northeast-1"
 }
@@ -89,17 +101,17 @@ resource "aws_cognito_user_pool_client" "client" {
   user_pool_id = aws_cognito_user_pool.pool.id
 
   # nonceを有効にするために必要な設定
-  allowed_oauth_flows                  = ["code", "implicit"]
+  allowed_oauth_flows                  = ["code"]
   allowed_oauth_flows_user_pool_client = true
   allowed_oauth_scopes                 = ["email", "openid", "profile"]
 
   # OpenID Connect設定を追加
-  enable_token_revocation = true
+  enable_token_revocation       = true
   prevent_user_existence_errors = "ENABLED"
 
   # OIDCのnonce対応を有効化
-  auth_session_validity = 3 # minutes
-  id_token_validity = 60   # minutes
+  auth_session_validity = 3  # minutes
+  id_token_validity     = 60 # minutes
 
   # TODO: tfvars で指定する
   callback_urls        = ["http://localhost:8080/callback"]
@@ -112,7 +124,7 @@ resource "aws_cognito_user_pool_client" "client" {
   ]
 
   generate_secret              = true
-  supported_identity_providers = ["COGNITO"]
+  supported_identity_providers = ["COGNITO", "Google"]
 
   token_validity_units {
     access_token  = "minutes"
@@ -122,35 +134,26 @@ resource "aws_cognito_user_pool_client" "client" {
 
   access_token_validity  = 60
   refresh_token_validity = 30
+
+  depends_on = [aws_cognito_identity_provider.google]
 }
 
-resource "aws_cognito_user_pool_client" "m2m_client" {
-  name         = "aws-cognito-sample-m2m-client"
-  user_pool_id = aws_cognito_user_pool.pool.id
+resource "aws_cognito_identity_provider" "google" {
+  user_pool_id  = aws_cognito_user_pool.pool.id
+  provider_name = "Google"
+  provider_type = "Google"
 
-  allowed_oauth_flows                  = ["code"]
-  allowed_oauth_flows_user_pool_client = true
-  allowed_oauth_scopes = [
-    "email",
-    "openid",
-    "profile",
-    "default-m2m-resource-server-d7rdxs/read"
-  ]
-
-  generate_secret              = true
-  supported_identity_providers = ["COGNITO"]
-
-  token_validity_units {
-    access_token  = "minutes"
-    id_token      = "minutes"
-    refresh_token = "days"
+  provider_details = {
+    client_id        = var.google_client_id
+    client_secret    = var.google_client_secret
+    authorize_scopes = "email openid profile"
   }
 
-  access_token_validity  = 60
-  id_token_validity      = 60
-  refresh_token_validity = 30
+  attribute_mapping = {
+    email    = "email"
+    username = "sub"
+  }
 }
-
 
 resource "aws_cognito_user_pool_domain" "main" {
   domain       = "yasuaki640-domain"

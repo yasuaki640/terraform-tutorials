@@ -1,0 +1,14 @@
+# Google OAuth Configuration
+# Copy this file to terraform.tfvars and replace with your actual Google OAuth credentials
+# 
+# To get Google OAuth credentials:
+# 1. Go to Google Cloud Console (https://console.cloud.google.com/)
+# 2. Create or select a project
+# 3. Enable Google+ API
+# 4. Go to "Credentials" and create OAuth 2.0 Client ID
+# 5. Set authorized redirect URIs to include your Cognito domain callback URL
+#
+# Example: https://yasuaki640-domain.auth.ap-northeast-1.amazoncognito.com/oauth2/idpresponse
+
+google_client_id     = "your-google-client-id.apps.googleusercontent.com"
+google_client_secret = "your-google-client-secret"

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(terraform plan:*)",
+      "Bash(git stash:*)"
+    ],
+    "deny": []
+  }
+}
