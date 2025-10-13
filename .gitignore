@@ -42,4 +42,7 @@ terraform.rc
 *.zip
 
 # claude
-.claude/settings.local.json
+.claude/
+
+# serena
+.serena/
