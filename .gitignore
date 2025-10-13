@@ -40,3 +40,6 @@ terraform.rc
 .idea
 
 *.zip
+
+# claude
+.claude/settings.local.json
