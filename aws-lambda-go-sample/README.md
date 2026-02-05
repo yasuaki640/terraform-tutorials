@@ -11,6 +11,7 @@
 ## セットアップ
 
 1. Goの依存関係をインストールします：
+
 ```bash
 go mod download
 ```
@@ -18,6 +19,7 @@ go mod download
 2. Terraformでデプロイします：
    `./deploy.sh` スクリプトを実行すると、Lambda関数のビルドとデプロイが自動的に行われます。
    または、個別にTerraformコマンドを実行することも可能です。
+
 ```bash
 # 推奨: ビルドとデプロイを一度に行う
 ./deploy.sh
