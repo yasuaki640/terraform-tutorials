@@ -1,0 +1,12 @@
+# リージョン（デフォルト: ap-northeast-1）
+# aws_region = "ap-northeast-1"
+
+# プロジェクト名（Cognito ドメインのプレフィックスにも使われる）
+# 注意: Cognito ドメインはグローバルで一意である必要がある
+# project_name = "cognito-oidc-sample"
+
+# コールバック URL（ローカル開発用）
+# callback_url = "http://localhost:8080/callback"
+
+# ログアウト URL（ローカル開発用）
+# logout_url = "http://localhost:3000"
