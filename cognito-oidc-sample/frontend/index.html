@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cognito OIDC Sample - PKCE + JWT 手動実装</title>
+    <style>
+        /* シンプルなスタイリング（外部CSS不使用） */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 640px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 24px;
+        }
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+        .card h2 {
+            font-size: 1.1rem;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #eee;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .info-row:last-child { border-bottom: none; }
+        .info-label { color: #666; font-size: 0.9rem; }
+        .info-value { font-weight: 500; word-break: break-all; }
+        button {
+            display: inline-block;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-primary {
+            background: #2563eb;
+            color: #fff;
+            width: 100%;
+        }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-danger {
+            background: #dc2626;
+            color: #fff;
+            width: 100%;
+        }
+        .btn-danger:hover { background: #b91c1c; }
+        .error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-size: 0.9rem;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        .hidden { display: none; }
+        .flow-step {
+            background: #f0f9ff;
+            border-left: 3px solid #2563eb;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Cognito OIDC Sample</h1>
+        <p class="subtitle">PKCE + JWT 署名検証を手動で実装した学習用サンプル</p>
+
+        <!-- エラー表示 -->
+        <div id="error-container" class="error hidden"></div>
+
+        <!-- ローディング表示 -->
+        <div id="loading" class="card loading">設定を読み込み中...</div>
+
+        <!-- 未認証状態: ログインボタン -->
+        <div id="login-section" class="hidden">
+            <div class="card">
+                <h2>ログイン</h2>
+                <p style="margin-bottom:16px; font-size:0.9rem; color:#666;">
+                    Cognito Hosted UI にリダイレクトして認証を行います。<br>
+                    Authorization Code + PKCE フローを使用します。
+                </p>
+                <button id="login-btn" class="btn-primary" onclick="startLogin()">
+                    Cognito でログイン
+                </button>
+            </div>
+
+            <!-- PKCE フロー説明 -->
+            <div class="card">
+                <h2>PKCE フローの流れ</h2>
+                <div class="flow-step">1. code_verifier（ランダム文字列）を生成</div>
+                <div class="flow-step">2. code_challenge = SHA-256(code_verifier) を計算</div>
+                <div class="flow-step">3. Cognito /authorize に code_challenge を送信</div>
+                <div class="flow-step">4. 認証後、Cognito が認可コード（code）を返却</div>
+                <div class="flow-step">5. code + code_verifier をバックエンドに送信</div>
+                <div class="flow-step">6. バックエンドが Cognito でトークンに交換</div>
+            </div>
+        </div>
+
+        <!-- 認証済み状態: ユーザー情報 + ログアウト -->
+        <div id="user-section" class="hidden">
+            <div class="card">
+                <h2>ユーザー情報</h2>
+                <div class="info-row">
+                    <span class="info-label">Subject (sub)</span>
+                    <span class="info-value" id="user-sub">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Email</span>
+                    <span class="info-value" id="user-email">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Username</span>
+                    <span class="info-value" id="user-username">-</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>トークン情報</h2>
+                <div class="info-row">
+                    <span class="info-label">Access Token（先頭40文字）</span>
+                    <span class="info-value" id="token-preview">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">有効期限（expires_in）</span>
+                    <span class="info-value" id="token-expires">-</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <button class="btn-danger" onclick="startLogout()">ログアウト</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // =========================================================================
+    // アプリケーション状態
+    // =========================================================================
+    // トークンは JavaScript 変数（メモリ）に保持する。
+    // なぜ localStorage / sessionStorage を使わないか:
+    //   XSS（クロスサイトスクリプティング）攻撃で localStorage の内容は
+    //   容易に読み取られる。メモリに保持すればページリロードで消えるため、
+    //   攻撃窓口が限定される。
+    //   ただし、ページリロードでログアウトされるトレードオフがある。
+    //   本番環境では httpOnly Cookie + サーバーサイドセッションが推奨。
+    //
+    // code_verifier と state は sessionStorage に保存する。
+    // なぜ: Cognito へのリダイレクト → コールバックの間でブラウザの
+    //   ページ遷移が発生するため、メモリ変数では保持できない。
+    //   sessionStorage はタブ単位で隔離され、タブを閉じると消える。
+    // =========================================================================
+    let accessToken = null;
+    let appConfig = null;
+
+    // =========================================================================
+    // 初期化
+    // =========================================================================
+    document.addEventListener('DOMContentLoaded', async () => {
+        try {
+            // サーバーから設定を取得
+            await loadConfig();
+
+            // URL にコールバックパラメーターがあるか確認
+            const params = new URLSearchParams(window.location.search);
+            const code = params.get('code');
+            const state = params.get('state');
+
+            if (code && state) {
+                // コールバック処理（Cognito からのリダイレクト後）
+                await handleCallback(code, state);
+            } else {
+                // 通常のページロード
+                showLoginSection();
+            }
+        } catch (err) {
+            showError(err.message);
+        }
+    });
+
+    // =========================================================================
+    // 設定の読み込み
+    // =========================================================================
+    async function loadConfig() {
+        const resp = await fetch('/config');
+        if (!resp.ok) {
+            throw new Error('サーバー設定の取得に失敗しました');
+        }
+        appConfig = await resp.json();
+    }
+
+    // =========================================================================
+    // PKCE: code_verifier と code_challenge の生成
+    // =========================================================================
+    // RFC 7636 で定義された PKCE（Proof Key for Code Exchange）の実装。
+    //
+    // code_verifier: 43〜128文字のランダム文字列（Base64URL エンコード）
+    //   暗号学的に安全な乱数生成器（crypto.getRandomValues）を使用する。
+    //   Math.random() は予測可能なため、セキュリティ用途には使えない。
+    //
+    // code_challenge: code_verifier の SHA-256 ハッシュ（Base64URL エンコード）
+    //   Cognito の /authorize エンドポイントに送信する。
+    //   code_verifier 自体は送信しない（ハッシュの一方向性を利用）。
+    // =========================================================================
+
+    /**
+     * code_verifier を生成する（RFC 7636 Section 4.1）
+     * 32バイト（256ビット）の暗号学的乱数を Base64URL エンコード → 43文字
+     */
+    function generateCodeVerifier() {
+        const array = new Uint8Array(32);
+        crypto.getRandomValues(array);
+        return base64UrlEncode(array);
+    }
+
+    /**
+     * code_challenge を生成する（RFC 7636 Section 4.2）
+     * code_challenge = BASE64URL(SHA256(code_verifier))
+     *
+     * Web Crypto API（crypto.subtle）を使用。
+     * なぜ外部ライブラリを使わないか:
+     *   ブラウザには暗号演算の標準 API が組み込まれている。
+     *   SHA-256 は Web Crypto API でネイティブに計算でき、高速かつ安全。
+     */
+    async function generateCodeChallenge(verifier) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(verifier);
+        const digest = await crypto.subtle.digest('SHA-256', data);
+        return base64UrlEncode(new Uint8Array(digest));
+    }
+
+    /**
+     * Base64URL エンコード（RFC 4648 Section 5）
+     *
+     * 標準 Base64 との違い:
+     *   + → -   （URL でクエリパラメーターの区切りと衝突しない）
+     *   / → _   （URL のパス区切りと衝突しない）
+     *   = 除去  （URL エンコードが不要になる）
+     */
+    function base64UrlEncode(bytes) {
+        let binary = '';
+        for (const byte of bytes) {
+            binary += String.fromCharCode(byte);
+        }
+        return btoa(binary)
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '');
+    }
+
+    /**
+     * CSRF 対策用の state パラメーターを生成する。
+     *
+     * なぜ state が必要か:
+     *   攻撃者が自分の認可コードを被害者のブラウザに送り込む
+     *   「CSRF（Cross-Site Request Forgery）攻撃」を防ぐ。
+     *   state はリクエストとコールバックを紐づけるワンタイムトークン。
+     */
+    function generateState() {
+        const array = new Uint8Array(16);
+        crypto.getRandomValues(array);
+        return base64UrlEncode(array);
+    }
+
+    // =========================================================================
+    // ログイン（認可リクエスト）
+    // =========================================================================
+    async function startLogin() {
+        try {
+            // 1. PKCE パラメーターを生成
+            const codeVerifier = generateCodeVerifier();
+            const codeChallenge = await generateCodeChallenge(codeVerifier);
+            const state = generateState();
+
+            // 2. code_verifier と state を sessionStorage に保存
+            //    Cognito へのリダイレクト後もこれらの値が必要なため
+            sessionStorage.setItem('code_verifier', codeVerifier);
+            sessionStorage.setItem('oauth_state', state);
+
+            // 3. Cognito の /authorize エンドポイントにリダイレクト
+            const params = new URLSearchParams({
+                response_type: 'code',              // 認可コードフロー
+                client_id: appConfig.client_id,
+                redirect_uri: appConfig.redirect_uri,
+                scope: 'openid email profile',
+                code_challenge: codeChallenge,       // PKCE: チャレンジ
+                code_challenge_method: 'S256',       // SHA-256 を使用
+                state: state                         // CSRF 対策
+            });
+
+            const authorizeUrl = `${appConfig.cognito_domain}/authorize?${params.toString()}`;
+            window.location.href = authorizeUrl;
+        } catch (err) {
+            showError('ログイン開始に失敗しました: ' + err.message);
+        }
+    }
+
+    // =========================================================================
+    // コールバック処理（Cognito からのリダイレクト後）
+    // =========================================================================
+    async function handleCallback(code, state) {
+        try {
+            // 1. state の検証（CSRF チェック）
+            const savedState = sessionStorage.getItem('oauth_state');
+            if (!savedState || savedState !== state) {
+                throw new Error('state パラメーターが一致しません（CSRF 攻撃の可能性）');
+            }
+
+            // 2. code_verifier を取得
+            const codeVerifier = sessionStorage.getItem('code_verifier');
+            if (!codeVerifier) {
+                throw new Error('code_verifier が見つかりません（セッションが失われた可能性）');
+            }
+
+            // 3. sessionStorage をクリア（一度きりの使用）
+            sessionStorage.removeItem('oauth_state');
+            sessionStorage.removeItem('code_verifier');
+
+            // 4. バックエンドにトークン交換を依頼
+            //    code + code_verifier をバックエンドに送信
+            //    バックエンドが Cognito の /oauth2/token と通信
+            const resp = await fetch('/callback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    code: code,
+                    code_verifier: codeVerifier
+                })
+            });
+
+            if (!resp.ok) {
+                const errorData = await resp.json();
+                throw new Error(errorData.error || 'トークン交換に失敗しました');
+            }
+
+            const tokens = await resp.json();
+            accessToken = tokens.access_token;
+
+            // URL からクエリパラメーターを除去（セキュリティ: 認可コードをURLに残さない）
+            window.history.replaceState({}, document.title, '/');
+
+            // 5. ユーザー情報を取得して表示
+            await fetchAndDisplayUser();
+        } catch (err) {
+            showError(err.message);
+            showLoginSection();
+        }
+    }
+
+    // =========================================================================
+    // ユーザー情報の取得
+    // =========================================================================
+    async function fetchAndDisplayUser() {
+        try {
+            // Access Token を Authorization ヘッダーに設定
+            // RFC 6750: Bearer Token の使用方法
+            const resp = await fetch('/me', {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`
+                }
+            });
+
+            if (!resp.ok) {
+                if (resp.status === 401) {
+                    throw new Error('トークンが無効です。再ログインしてください。');
+                }
+                throw new Error('ユーザー情報の取得に失敗しました');
+            }
+
+            const user = await resp.json();
+
+            // UI を更新
+            document.getElementById('user-sub').textContent = user.sub;
+            document.getElementById('user-email').textContent = user.email;
+            document.getElementById('user-username').textContent = user.username;
+            document.getElementById('token-preview').textContent =
+                accessToken.substring(0, 40) + '...';
+            document.getElementById('token-expires').textContent = '1時間（サーバー側で検証）';
+
+            showUserSection();
+        } catch (err) {
+            showError(err.message);
+            accessToken = null;
+            showLoginSection();
+        }
+    }
+
+    // =========================================================================
+    // ログアウト
+    // =========================================================================
+    async function startLogout() {
+        try {
+            // バックエンドから Cognito ログアウト URL を取得
+            const resp = await fetch('/logout', { method: 'POST' });
+            if (!resp.ok) {
+                throw new Error('ログアウト URL の取得に失敗しました');
+            }
+
+            const data = await resp.json();
+
+            // メモリからトークンを削除
+            accessToken = null;
+
+            // Cognito のログアウトエンドポイントにリダイレクト
+            // Cognito がセッションを破棄し、logout_uri にリダイレクトする
+            window.location.href = data.logout_url;
+        } catch (err) {
+            showError(err.message);
+        }
+    }
+
+    // =========================================================================
+    // UI ヘルパー
+    // =========================================================================
+    function showLoginSection() {
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('login-section').classList.remove('hidden');
+        document.getElementById('user-section').classList.add('hidden');
+    }
+
+    function showUserSection() {
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('login-section').classList.add('hidden');
+        document.getElementById('user-section').classList.remove('hidden');
+    }
+
+    function showError(message) {
+        const container = document.getElementById('error-container');
+        container.textContent = message;
+        container.classList.remove('hidden');
+        document.getElementById('loading').classList.add('hidden');
+    }
+    </script>
+</body>
+</html>
